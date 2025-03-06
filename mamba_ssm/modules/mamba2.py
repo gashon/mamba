@@ -5,7 +5,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from einops import rearrange, repeat
 
 try:
@@ -19,19 +18,19 @@ except ImportError:
     causal_conv1d_varlen_states = None
 
 try:
-    from mamba_ssm.ops.triton.selective_state_update import selective_state_update
+    from mamba_ssm.ops.triton.selective_state_update import \
+        selective_state_update
 except ImportError:
     selective_state_update = None
 
-from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
-
-from mamba_ssm.distributed.tensor_parallel import ColumnParallelLinear, RowParallelLinear
-from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
-
-from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
-from mamba_ssm.ops.triton.ssd_combined import mamba_split_conv1d_scan_combined
-
 from huggingface_hub import PyTorchModelHubMixin
+
+from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
+from mamba_ssm.distributed.tensor_parallel import (ColumnParallelLinear,
+                                                   RowParallelLinear)
+from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
+from mamba_ssm.ops.triton.ssd_combined import (
+    mamba_chunk_scan_combined, mamba_split_conv1d_scan_combined)
 
 
 class Mamba2(nn.Module, PyTorchModelHubMixin):
@@ -75,7 +74,7 @@ class Mamba2(nn.Module, PyTorchModelHubMixin):
         self.sequence_parallel = sequence_parallel
         self.world_size = 1 if process_group is None else process_group.size()
         self.local_rank = 0 if process_group is None else process_group.rank()
-        self.d_inner = (self.expand * self.d_model) // self.world_size
+        self.d_inner = int((self.expand * self.d_model) // self.world_size)
         assert self.d_inner * self.world_size == self.expand * self.d_model
         self.headdim = headdim
         self.d_ssm = self.d_inner if d_ssm is None else d_ssm // self.world_size
