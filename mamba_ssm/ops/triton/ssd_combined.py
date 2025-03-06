@@ -3,42 +3,45 @@
 """We want triton==2.1.0 or 2.2.0 for this
 """
 
-from typing import Optional
-
 import math
-from packaging import version
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
-from torch import Tensor
-from mamba_ssm.utils.torch import custom_bwd, custom_fwd
-
 import triton
 import triton.language as tl
-
 from einops import rearrange, repeat
+from packaging import version
+from torch import Tensor
+
+from mamba_ssm.utils.torch import custom_bwd, custom_fwd
 
 try:
-    from causal_conv1d import causal_conv1d_fn
     import causal_conv1d_cuda
+    from causal_conv1d import causal_conv1d_fn
 except ImportError:
     causal_conv1d_fn, causal_conv1d_cuda = None, None
 
-from mamba_ssm.ops.triton.ssd_bmm import _bmm_chunk_fwd, _bmm_chunk_bwd
-from mamba_ssm.ops.triton.ssd_chunk_state import _chunk_cumsum_fwd, _chunk_cumsum_bwd
-from mamba_ssm.ops.triton.ssd_chunk_state import _chunk_state_fwd, _chunk_state_bwd_db
-from mamba_ssm.ops.triton.ssd_chunk_state import _chunk_state_bwd_ddAcs_stable
-from mamba_ssm.ops.triton.ssd_chunk_state import chunk_state, chunk_state_ref
-from mamba_ssm.ops.triton.ssd_chunk_state import chunk_state_varlen
-from mamba_ssm.ops.triton.ssd_state_passing import _state_passing_fwd, _state_passing_bwd
-from mamba_ssm.ops.triton.ssd_state_passing import state_passing, state_passing_ref
-from mamba_ssm.ops.triton.ssd_chunk_scan import _chunk_scan_fwd, _chunk_scan_bwd_dz, _chunk_scan_bwd_dstates
-from mamba_ssm.ops.triton.ssd_chunk_scan import _chunk_scan_bwd_dC, _chunk_scan_bwd_dcb
-from mamba_ssm.ops.triton.ssd_chunk_scan import _chunk_scan_bwd_ddAcs_stable
-from mamba_ssm.ops.triton.ssd_chunk_scan import chunk_scan, chunk_scan_ref
-from mamba_ssm.ops.triton.ssd_chunk_scan import _chunk_scan_bwd_ddAcs_prev
-from mamba_ssm.ops.triton.layernorm_gated import rmsnorm_fn, _layer_norm_fwd, _layer_norm_bwd
-from mamba_ssm.ops.triton.k_activations import _swiglu_fwd, _swiglu_bwd
+from mamba_ssm.ops.triton.k_activations import _swiglu_bwd, _swiglu_fwd
+from mamba_ssm.ops.triton.layernorm_gated import (_layer_norm_bwd,
+                                                  _layer_norm_fwd, rmsnorm_fn)
+from mamba_ssm.ops.triton.ssd_bmm import _bmm_chunk_bwd, _bmm_chunk_fwd
+from mamba_ssm.ops.triton.ssd_chunk_scan import (_chunk_scan_bwd_dC,
+                                                 _chunk_scan_bwd_dcb,
+                                                 _chunk_scan_bwd_ddAcs_prev,
+                                                 _chunk_scan_bwd_ddAcs_stable,
+                                                 _chunk_scan_bwd_dstates,
+                                                 _chunk_scan_bwd_dz,
+                                                 _chunk_scan_fwd, chunk_scan,
+                                                 chunk_scan_ref)
+from mamba_ssm.ops.triton.ssd_chunk_state import (
+    _chunk_cumsum_bwd, _chunk_cumsum_fwd, _chunk_state_bwd_db,
+    _chunk_state_bwd_ddAcs_stable, _chunk_state_fwd, chunk_state,
+    chunk_state_ref, chunk_state_varlen)
+from mamba_ssm.ops.triton.ssd_state_passing import (_state_passing_bwd,
+                                                    _state_passing_fwd,
+                                                    state_passing,
+                                                    state_passing_ref)
 
 TRITON_22 = version.parse(triton.__version__) >= version.parse('2.2.0')
 
@@ -927,7 +930,21 @@ def mamba_split_conv1d_scan_combined(zxbcdt, conv1d_weight, conv1d_bias, dt_bias
     Return:
         out: (batch, seqlen, dim)
     """
+
+    # TODO(gashon): handle local conversion through local_map autograd func decorator
+    if isinstance(conv1d_weight, torch.distributed.tensor.DTensor):
+        conv1d_weight = conv1d_weight.to_local()
+        conv1d_bias = conv1d_bias.to_local()
+        dt_bias = dt_bias.to_local()
+
+        A = A.to_local()
+        D = D.to_local()
+
+        rmsnorm_weight = rmsnorm_weight.to_local()
+        outproj_weight = outproj_weight.to_local()
+
     return MambaSplitConv1dScanCombinedFn.apply(zxbcdt, conv1d_weight, conv1d_bias, dt_bias, A, D, chunk_size, initial_states, seq_idx, dt_limit, return_final_states, activation, rmsnorm_weight, rmsnorm_eps, outproj_weight, outproj_bias, headdim, ngroups, norm_before_gate)
+
 
 
 def mamba_split_conv1d_scan_ref(zxbcdt, conv1d_weight, conv1d_bias, dt_bias, A, D, chunk_size, dt_limit=(0.0, float("inf")), activation="silu", rmsnorm_weight=None, rmsnorm_eps=1e-6, outproj_weight=None, outproj_bias=None, headdim=None, ngroups=1, norm_before_gate=True):
