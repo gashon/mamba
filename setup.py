@@ -1,29 +1,22 @@
 # Copyright (c) 2023, Albert Gu, Tri Dao.
-import sys
-import warnings
-import os
-import re
 import ast
-from pathlib import Path
-from packaging.version import parse, Version
+import os
 import platform
+import re
 import shutil
-
-from setuptools import setup, find_packages
 import subprocess
-
-import urllib.request
+import sys
 import urllib.error
-from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+import urllib.request
+import warnings
+from pathlib import Path
 
 import torch
-from torch.utils.cpp_extension import (
-    BuildExtension,
-    CUDAExtension,
-    CUDA_HOME,
-    HIP_HOME
-)
-
+from packaging.version import Version, parse
+from setuptools import find_packages, setup
+from torch.utils.cpp_extension import (CUDA_HOME, HIP_HOME, BuildExtension,
+                                       CUDAExtension)
+from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -38,10 +31,12 @@ BASE_WHEEL_URL = "https://github.com/state-spaces/mamba/releases/download/{tag_n
 
 # FORCE_BUILD: Force a fresh build locally, instead of attempting to find prebuilt wheels
 # SKIP_CUDA_BUILD: Intended to allow CI to use a simple `python setup.py sdist` run to copy over raw files, without any cuda compilation
-FORCE_BUILD = os.getenv("MAMBA_FORCE_BUILD", "FALSE") == "TRUE"
+FORCE_BUILD = os.getenv("MAMBA_FORCE_BUILD", "TRUE") == "TRUE"
 SKIP_CUDA_BUILD = os.getenv("MAMBA_SKIP_CUDA_BUILD", "FALSE") == "TRUE"
 # For CI, we want the option to build with C++11 ABI since the nvcr images use C++11 ABI
 FORCE_CXX11_ABI = os.getenv("MAMBA_FORCE_CXX11_ABI", "FALSE") == "TRUE"
+
+print("Building package from scratch...")
 
 
 def get_platform():
