@@ -4,12 +4,11 @@
 """
 
 import math
+
 import torch
 import torch.nn.functional as F
-
 import triton
 import triton.language as tl
-
 from einops import rearrange, repeat
 
 from mamba_ssm.ops.triton.softplus import softplus
@@ -48,9 +47,9 @@ def _chunk_cumsum_fwd_kernel(
     HAS_DT_BIAS: tl.constexpr,
     BLOCK_SIZE_H: tl.constexpr, BLOCK_SIZE_CHUNK: tl.constexpr,
 ):
-    pid_b = tl.program_id(axis=0)
-    pid_c = tl.program_id(axis=1)
-    pid_h = tl.program_id(axis=2)
+    pid_b = tl.program_id(axis=0).to(tl.int64) # MODIFIED
+    pid_c = tl.program_id(axis=1).to(tl.int64) # MODIFIED
+    pid_h = tl.program_id(axis=2).to(tl.int64) # MODIFIED
     dt_ptr += pid_b * stride_dt_batch + pid_c * chunk_size * stride_dt_seqlen
     dt_out_ptr += pid_b * stride_dt_out_batch + pid_c * stride_dt_out_chunk
     dA_cumsum_ptr += pid_b * stride_dA_cs_batch + pid_c * stride_dA_cs_chunk
