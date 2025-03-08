@@ -113,9 +113,9 @@ def _chunk_cumsum_bwd_kernel(
     HAS_DT_BIAS: tl.constexpr,
     BLOCK_SIZE_H: tl.constexpr, BLOCK_SIZE_CHUNK: tl.constexpr,
 ):
-    pid_b = tl.program_id(axis=0)
-    pid_c = tl.program_id(axis=1)
-    pid_h = tl.program_id(axis=2)
+    pid_b = tl.program_id(axis=0).to(tl.int64)
+    pid_c = tl.program_id(axis=1).to(tl.int64)
+    pid_h = tl.program_id(axis=2).to(tl.int64)
     ddt_out_ptr += pid_b * stride_ddt_out_batch + pid_c * stride_ddt_out_chunk
     ddA_ptr += pid_b * stride_ddA_batch + pid_c * stride_ddA_chunk
     dt_ptr += pid_b * stride_dt_batch + pid_c * chunk_size * stride_dt_seqlen
