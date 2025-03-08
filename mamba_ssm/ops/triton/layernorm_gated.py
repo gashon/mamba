@@ -8,10 +8,8 @@ import math
 
 import torch
 import torch.nn.functional as F
-
 import triton
 import triton.language as tl
-
 from einops import rearrange
 
 
@@ -63,8 +61,8 @@ def _layer_norm_fwd_1pass_kernel(
     IS_RMS_NORM: tl.constexpr,
 ):
     # Map the program id to the row of X and Y it should compute.
-    row = tl.program_id(0)
-    group = tl.program_id(1)
+    row = tl.program_id(0).to(tl.int64) # MODIFIED
+    group = tl.program_id(1).to(tl.int64) # MODIFIED
     X += row * stride_x_row + group * N
     Y += row * stride_y_row + group * N
     if HAS_Z:
